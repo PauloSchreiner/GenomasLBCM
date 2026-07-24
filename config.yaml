@@ -1,0 +1,16 @@
+fastp:
+  qual_threshold: 20
+  min_length: 50
+
+spades:
+  mode: "--isolate"  # Default, mas é sobrescrito pelo samples.tsv
+# mode: "--careful" 
+# mode: "--meta" 
+
+filtering:
+  min_contig_length: 500
+
+busco:
+  lineage: "saccharomycetes_odb10"  # Default, mas é sobrescrito pelo samples.tsv
+# lineage: "ascomycota_odb10"
+# lineage: "basidiomycota_odb10"
