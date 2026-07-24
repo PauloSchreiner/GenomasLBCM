@@ -1,0 +1,169 @@
+
+# saves all sample names in /raw_data into SAMPLES
+SAMPLES, = glob_wildcards("raw_data/{sample}_1.fastq.gz")
+
+rule all:
+    input:
+        "results/qc_reports/multiqc/multiqc_report.html",
+        expand("results/qc_reports/blobtoolkit/{sample}/{sample}.snail.png", sample=SAMPLES)
+
+
+rule fastp:
+    input:
+        r1 = "raw_data/{sample}_1.fastq.gz",
+        r2 = "raw_data/{sample}_2.fastq.gz"
+    output:
+        r1_clean = "results/01_clean_data/{sample}_1.fastq.gz",
+        r2_clean = "results/01_clean_data/{sample}_2.fastq.gz",
+        html_report = "results/qc_reports/fastp/{sample}_fastp.html",
+        json_report = "results/qc_reports/fastp/{sample}_fastp.json"
+    threads: 4
+    log:
+        "results/logs/01_fastp_{sample}.log"
+    shell:
+        """
+        fastp \
+            -i {input.r1} -I {input.r2} \
+            -o {output.r1_clean} -O {output.r2_clean} \
+            -h {output.html_report} -j {output.json_report} \
+            -q 20 -l 50 \
+            --detect_adapter_for_pe \
+            -c \
+            --thread {threads} \
+            2> {log}
+        """
+
+rule spades:
+    input:
+        r1 = "results/01_clean_data/{sample}_1.fastq.gz",
+        r2 = "results/01_clean_data/{sample}_2.fastq.gz"
+    output:
+        contigs = "results/02_assembly/{sample}/contigs.fasta",
+        scaffolds = "results/02_assembly/{sample}/scaffolds.fasta"
+    params:
+        outdir = "results/02_assembly/{sample}"
+    threads: 8
+    log:
+        "results/logs/02_spades_{sample}.log"
+    shell:
+        """
+        spades.py \
+            -1 {input.r1} -2 {input.r2} \
+            -o {params.outdir} \
+            -t {threads} \
+            --isolate \
+            > {log} 2>&1
+        """
+
+
+
+
+rule quast:
+    input:
+        assembly = "results/02_assembly/{sample}/scaffolds.fasta"
+    output:
+        report = "results/qc_reports/quast/{sample}/report.tsv"
+    params:
+        outdir = "results/qc_reports/quast/{sample}"
+    threads: 4
+    log:
+        "results/logs/03_quast_{sample}.log"
+    shell:
+        """
+        quast.py {input.assembly} \
+                 -o {params.outdir} \
+                 -t {threads} \
+                 > {log} 2>&1
+        """
+
+
+rule busco:
+    input:
+        assembly = "results/02_assembly/{sample}/scaffolds.fasta"
+    output:
+        summary = "results/qc_reports/busco/{sample}/short_summary.specific.saccharomycetes_odb10.{sample}.txt"
+    params:
+        out_path = "results/qc_reports/busco",
+        lineage = "saccharomycetes_odb10"
+    threads: 8
+    log:
+        "results/logs/03_busco_{sample}.log"
+    shell:
+        """
+        busco -i {input.assembly} \
+              -l {params.lineage} \
+              -o {wildcards.sample} \
+              --out_path {params.out_path} \
+              -m genome \
+              -c {threads} \
+              -f \
+              > {log} 2>&1
+        """
+
+
+rule multiqc:
+    input:
+        fastp = expand("results/qc_reports/fastp/{sample}_fastp.json", sample=SAMPLES),
+        quast = expand("results/qc_reports/quast/{sample}/report.tsv", sample=SAMPLES),
+        busco = expand("results/qc_reports/busco/{sample}/short_summary.specific.saccharomycetes_odb10.{sample}.txt", sample=SAMPLES)
+    output:
+        report = "results/qc_reports/multiqc/multiqc_report.html"
+    params:
+        search_dir = "results/qc_reports",
+        outdir = "results/qc_reports/multiqc"
+    log:
+        "results/logs/05_multiqc.log"
+    shell:
+        """
+        multiqc {params.search_dir} \
+            -o {params.outdir} \
+            -f \
+            > {log} 2>&1
+        """
+
+
+rule blobtoolkit:
+    input:
+        assembly = "results/02_assembly/{sample}/scaffolds.fasta",
+        busco_table = "results/qc_reports/busco/{sample}/run_saccharomycetes_odb10/full_table.tsv"
+    output:
+        plot = "results/qc_reports/blobtoolkit/{sample}/{sample}.snail.png"
+    params:
+        dataset_dir = "results/qc_reports/blobtoolkit/{sample}"
+    threads: 2
+    log:
+        "results/logs/04_blobtoolkit_{sample}.log"
+    shell:
+        """
+        # 1. Apaga a pasta pré-criada pelo Snakemake para evitar conflitos
+        rm -rf {params.dataset_dir}
+        
+        # 2. Cria o banco de dados do BlobToolKit
+        blobtools create \
+            --fasta {input.assembly} \
+            --busco {input.busco_table} \
+            {params.dataset_dir} \
+            > {log} 2>&1
+            
+        # 3. Gera a imagem PNG usando o motor gráfico invisível
+        blobtools view \
+            --view snail \
+            --format png \
+            --out {params.dataset_dir} \
+            {params.dataset_dir} \
+            >> {log} 2>&1
+        """
+
+
+# Incluir uma rule RagTag para amostras que possuam genoma de referencia (para alinhar as contigs)
+
+
+"""
+
+anotação funcional: 
+eggNOG-mapper para atribuição de GO
+InterProScan para identificação de domínios conservados
+antiSMASH para buscar metabólitos secundários (BGCs)
+dbCAN/HMMER - para buscar CAZymes 
+
+"""
