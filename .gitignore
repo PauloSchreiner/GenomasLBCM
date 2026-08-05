@@ -4,6 +4,9 @@
 data/
 results/
 
+data/*
+!data/**/.gitkeep
+
 referencias/*.fasta
 referencias/*.fa
 referencias/*.fna
