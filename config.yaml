@@ -23,4 +23,4 @@ host_references:
   human: "data/dbs/human/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
 
 minimap2:
-  mem: "-I 2g -K 500M" # if PC has plenty of RAM, change to ""
+  mem: "-I 8g -K 500M" # if PC has plenty of RAM, change to ""
