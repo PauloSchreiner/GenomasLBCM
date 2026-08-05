@@ -2,7 +2,7 @@ import pandas as pd
 
 configfile: "config.yaml"
 
-# Lê a tabela de amostras (substitui a busca automática por wildcards)
+# reads the sheet with samples and run params
 samples_df = pd.read_csv("samples.tsv", sep="\t").set_index("sample", drop=False)
 
 # saves all sample names in /raw_data into SAMPLES
@@ -14,32 +14,43 @@ BUSCO_OUTPUTS = [
     for sample in SAMPLES
 ]
 
-# ==========================================
-# REGRAS ALVO (TARGET RULES)
-# ==========================================
 
-# Roda tudo (Montagem + Anotação)
+# RULES
+
+# assembly + annotation
 rule all:
     input:
-        rules.assemble.input,
-        rules.annotate.input
-
-# Roda APENAS a montagem e controle de qualidade
-rule assemble:
-    input:
+        # assembly
         "results/qc_reports/multiqc/multiqc_report.html",
-        expand("results/qc_reports/{sample}_assembly_summary.txt", sample=SAMPLES)
-
-# Roda APENAS a anotação funcional
-rule annotate:
-    input:
-        # Deixaremos um arquivo de teste aqui por enquanto. 
-        # Ele será substituído pelos outputs reais do eggNOG no próximo passo.
+        expand("results/qc_reports/{sample}_assembly_summary.txt", sample=SAMPLES),
+        "results/qc_reports/runs_history/run_latest.stamp",
+        expand("results/02_assembly/{sample}/.cleaned", sample=SAMPLES),
+        # annotation
         expand("results/03_annotation/{sample}/placeholder.txt", sample=SAMPLES)
 
 
-# ==========================================
-# MÓDULOS (INCLUDES)
-# ==========================================
+# assembly and QC only
+rule assemble:
+    input:
+        "results/qc_reports/multiqc/multiqc_report.html",
+        expand("results/qc_reports/{sample}_assembly_summary.txt", sample=SAMPLES),
+        "results/qc_reports/runs_history/run_latest.stamp",
+        expand("results/02_assembly/{sample}/.cleaned", sample=SAMPLES)
+
+# QC only
+rule qc_only:
+    input:
+        expand("results/qc_reports/fastp/{sample}_fastp.html", sample=SAMPLES),
+        expand("results/qc_reports/fastp/{sample}_fastp.json", sample=SAMPLES)
+
+# annotation only
+rule annotate:
+    input:
+        expand("results/03_annotation/{sample}/placeholder.txt", sample=SAMPLES)
+
+
+# MODULOS
 include: "rules/assembly.smk"
 include: "rules/annotation.smk"
+
+

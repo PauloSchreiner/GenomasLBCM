@@ -1,15 +1,15 @@
 .snakemake/
 .snakemake_timestamp
 
-raw_data/
+data/
 results/
-busco_downloads/
 
 referencias/*.fasta
 referencias/*.fa
 referencias/*.fna
 referencias/*.gbk
 
+*.png
 *.fastq
 *.fastq.gz
 *.fq

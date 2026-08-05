@@ -3,7 +3,7 @@ fastp:
   min_length: 50
 
 spades:
-  mode: "--isolate"  # Default, mas é sobrescrito pelo samples.tsv
+  mode: "--isolate"  # Default, but gets overwritten by samples.tsv
 # mode: "--careful" 
 # mode: "--meta" 
 
@@ -11,6 +11,16 @@ filtering:
   min_contig_length: 500
 
 busco:
-  lineage: "saccharomycetes_odb10"  # Default, mas é sobrescrito pelo samples.tsv
+  lineage: "saccharomycetes_odb10"  # Default, but gets overwritten by samples.tsv
 # lineage: "ascomycota_odb10"
 # lineage: "basidiomycota_odb10"
+
+kraken2:
+  db: "data/dbs/kraken2"
+  mem: "--memory-mapping" # if PC has plenty of RAM, change to ""
+
+host_references:
+  human: "data/dbs/human/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
+
+minimap2:
+  mem: "-I 2g -K 500M" # if PC has plenty of RAM, change to ""
