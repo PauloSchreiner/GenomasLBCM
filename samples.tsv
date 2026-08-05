@@ -1,3 +1,5 @@
 sample	spades_mode	spades_k	cov_cutoff	filter_len	busco_lineage	reference_genome	host_remove	downsample_to
 pseudolambica	--isolate	auto	auto	500	saccharomycetes_odb10	none	none	4000000
-boidinii	--isolate	auto	auto	300	saccharomycetes_odb10	none	none	auto
+boidinii	--isolate	auto	auto	500	saccharomycetes_odb10	none	human	none
+kudriavzevii	--isolate	auto	auto	500	saccharomycetes_odb10	data/references/kudriavzevii.fna	none	none
+mrakii	--isolate	auto	auto	500	saccharomycetes_odb10	none	none	none

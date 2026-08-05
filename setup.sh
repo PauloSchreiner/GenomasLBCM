@@ -22,9 +22,32 @@ print_info() { echo -e "\n[INFO] $1"; }
 print_error() { echo -e "\n[ERROR] $1" >&2; }
 print_success() { echo -e "\n[SUCCESS] $1"; }
 
-echo "====================================================================="
-echo " Starting Setup"
-echo "====================================================================="
+cat << 'EOF'
+
+O       o O       o O       o O       o O       o O       o O       o 
+| O   o | | O   o | | O   o | | O   o | | O   o | | O   o | | O   o |
+| | O | | | | O | | | | O | | | | O | | | | O | | | | O | | | | O | |
+| o   O | | o   O | | o   O | | o   O | | o   O | | o   O | | o   O |
+o       O o       O o       O o       O o       O o       O o       O
+ __  __                __  ___                             __    __     
+ \ \/ /__  ____ ______/ /_/   |  _____________  ____ ___  / /_  / /__   
+  \  / _ \/ __ `/ ___/ __/ /| | / ___/ ___/ _ \/ __ `__ \/ __ \/ / _ \  
+  / /  __/ /_/ (__  ) /_/ ___ |(__  |__  )  __/ / / / / / /_/ / /  __/  
+ /_/\___/\__,_/____/\__/_/  |_/____/____/\___/_/ /_/ /_/_.___/_/\___/   
+
+    o O       o O       o O       o O       o O       o O       o O
+  o | | O   o | | O   o | | O   o | | O   o | | O   o | | O   o | | O 
+O | | | | O | | | | O | | | | O | | | | O | | | | O | | | | O | | | | O
+  O | | o   O | | o   O | | o   O | | o   O | | o   O | | o   O | | o 
+    O o       O o       O o       O o       O o       O o       O o   
+
+
+=====================================================================
+ SETTING UP...
+=====================================================================
+EOF
+
+
 
 # ==============================================================================
 # 1. KRAKEN 2 DATABASE SETUP
@@ -62,7 +85,7 @@ if [ ! -f "${KRAKEN_DIR}/taxo.k2d" ]; then
     # Cleanup
     print_info "Cleaning up temporary files..."
     rm "${KRAKEN_DB_VERSION}"
-    cd ../..
+    cd ../../..
     
     print_success "Kraken2 database configured successfully!"
 else

@@ -79,7 +79,7 @@ rule downsample_reads:
         "results/logs/01c_downsample_{sample}.log"
     shell:
         """
-        if [ "{params.target}" == "auto" ] || [ "{params.target}" == "none" ]; then
+        if [ "{params.target}" == "none" ]; then
             ln -sf $(realpath {input.r1}) {output.r1}
             ln -sf $(realpath {input.r2}) {output.r2}
         else

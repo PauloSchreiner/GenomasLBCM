@@ -1,10 +1,12 @@
 .snakemake/
 .snakemake_timestamp
 
-data/
 results/
 
 data/*
+!data/**/.gitkeep
+
+run_history/*
 !data/**/.gitkeep
 
 referencias/*.fasta
