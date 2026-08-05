@@ -7,7 +7,7 @@ data/*
 !data/**/.gitkeep
 
 run_history/*
-!data/**/.gitkeep
+!run_history/**/.gitkeep
 
 referencias/*.fasta
 referencias/*.fa
