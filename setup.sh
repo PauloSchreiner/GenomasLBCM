@@ -27,11 +27,14 @@ print_success() { echo -e "\n[SUCCESS] $1"; }
 
 cat << 'EOF'
 
-O       o O       o O       o O       o O       o O       o O       o 
-| O   o | | O   o | | O   o | | O   o | | O   o | | O   o | | O   o |
-| | O | | | | O | | | | O | | | | O | | | | O | | | | O | | | | O | |
-| o   O | | o   O | | o   O | | o   O | | o   O | | o   O | | o   O |
-o       O o       O o       O o       O o       O o       O o       O
+=======================================================================
+
+
+    o O       o O       o O       o O       o O       o O       o O
+  o | | O   o | | O   o | | O   o | | O   o | | O   o | | O   o | | O 
+O | | | | O | | | | O | | | | O | | | | O | | | | O | | | | O | | | | O
+  O | | o   O | | o   O | | o   O | | o   O | | o   O | | o   O | | o 
+    O o       O o       O o       O o       O o       O o       O o   
  __  __                __  ___                             __    __     
  \ \/ /__  ____ ______/ /_/   |  _____________  ____ ___  / /_  / /__   
   \  / _ \/ __ `/ ___/ __/ /| | / ___/ ___/ _ \/ __ `__ \/ __ \/ / _ \  
@@ -45,18 +48,17 @@ O | | | | O | | | | O | | | | O | | | | O | | | | O | | | | O | | | | O
     O o       O o       O o       O o       O o       O o       O o   
 
 
-=====================================================================
-                            SETTING UP...
-=====================================================================
+=======================================================================
+                              SETTING UP...
+=======================================================================
 EOF
-
 
 
 # ==============================================================================
 # KRAKEN2 DATABASE SETUP
 # ==============================================================================
 if [ ! -f "${KRAKEN_DIR}/taxo.k2d" ]; then
-    print_info "Kraken2 database not found. Starting download (approx. 6GB)..."
+    print_info "Kraken2 database not found. Starting download (~6GB)..."
     
     # create directory and navigate into it
     if ! mkdir -p "${KRAKEN_DIR}"; then
@@ -96,15 +98,20 @@ else
 fi
 
 # ==============================================================================
-# HUMAN REFERENCE GENOME SETUP (for decontamination)
+# MINIMAP2 HUMAN REFERENCE GENOME SETUP (for decontamination)
 # ==============================================================================
 HUMAN_DIR="data/dbs/human"
 HUMAN_FILE="Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
 HUMAN_URL="https://ftp.ensembl.org/pub/release-110/fasta/homo_sapiens/dna/${HUMAN_FILE}"
 
 if [ ! -f "${HUMAN_DIR}/${HUMAN_FILE}" ]; then
-    print_info "Human reference genome not found. Starting download (approx. 800MB)..."
-    mkdir -p "${HUMAN_DIR}"
+    print_info "Human reference genome not found. Starting download (~800MB)..."
+    
+    if ! mkdir -p "${HUMAN_DIR}"; then
+        print_error "Could not create directory: ${HUMAN_DIR}"
+        exit 1
+    fi
+    
     cd "${HUMAN_DIR}"
     
     if ! wget --show-progress "${HUMAN_URL}"; then
@@ -119,6 +126,46 @@ else
 fi
 
 
+# ==============================================================================
+# BOWTIE2 INDEX SETUP (alternative for decontamination)
+# ==============================================================================
+BOWTIE2_DIR="data/dbs/human/bowtie2"
+BOWTIE2_URL="https://genome-idx.s3.amazonaws.com/bt/GRCh38_noalt_as.zip"
+BOWTIE2_FILE="GRCh38_noalt_as.zip"
+
+if [ ! -f "${BOWTIE2_DIR}/GRCh38_noalt_as.1.bt2" ]; then
+    print_info "Bowtie2 index not found. Starting download (~4GB)..."
+    
+    if ! mkdir -p "${BOWTIE2_DIR}"; then
+        print_error "Could not create directory: ${BOWTIE2_DIR}"
+        exit 1
+    fi
+    
+    # download with error catching
+    print_info "Downloading Bowtie2 index archive..."
+    if ! wget --show-progress "${BOWTIE2_URL}" -O "${BOWTIE2_DIR}/${BOWTIE2_FILE}"; then
+        print_error "Failed to download the Bowtie2 index."
+        exit 1
+    fi
+    
+    # extraction with error catching
+    print_info "Extracting the index..."
+    if ! unzip -j "${BOWTIE2_DIR}/${BOWTIE2_FILE}" -d "${BOWTIE2_DIR}/"; then
+        print_error "Failed to extract the Bowtie2 index."
+        print_error "Suggestion: The downloaded zip archive might be corrupted."
+        exit 1
+    fi
+    
+    # cleanup
+    print_info "Cleaning up temporary files..."
+    rm "${BOWTIE2_DIR}/${BOWTIE2_FILE}"
+    
+    print_success "Bowtie2 index configured successfully!"
+else
+    print_info "Bowtie2 index already exists. Skipping download."
+fi
+
+
 # for when annotation is implemented:
 # ==============================================================================
 # EGGNOG-MAPPER DATABASE SETUP
@@ -127,9 +174,6 @@ fi
 # ==============================================================================
 # dbCAN3 DATABASE SETUP 
 # ==============================================================================
-
-
-
 
 
 echo "====================================================================="
