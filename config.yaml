@@ -16,22 +16,32 @@ fastp:
 spades:
   mode: "--isolate"  # default, but gets overwritten by samples.tsv
 # mode: "--careful" 
-# mode: "--meta" 
 
 filtering:
   min_contig_length: 500
 
 busco:
-  lineage: "saccharomycetes_odb10"  # Default, but gets overwritten by samples.tsv
+  lineage: "saccharomycetes_odb10"  # default, but gets overwritten by samples.tsv
 # lineage: "ascomycota_odb10"
 # lineage: "basidiomycota_odb10"
+# lineage: "fungi_odb10"
 
 kraken2:
   db: "data/dbs/kraken2"
-  mem: "--memory-mapping" # if PC has plenty of RAM, change to ""
+  mem: "--memory-mapping" # if there's enough RAM (>16gb), can be changed to ""
 
 host_references:
   human: "data/dbs/human/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
 
+
+# choose which tool will be used for decontamination based on your hardware:
+# "minimap2" (uses ~16gb RAM, fastest)
+# "bowtie2"  (uses ~4gb RAM, slower)
+decontaminator: "bowtie2"
+
+# paths to human genome for decontamination
+db_human_fasta: "data/dbs/human/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
+db_human_bowtie2: "data/dbs/human/bowtie2/GRCh38_noalt_as"
+
 minimap2:
-  mem: "-I 8g -K 500M" # if PC has plenty of RAM, change to ""
+  mem: "-I 8g -K 500M" # if there's enough RAM (>16gb), can be changed to ""

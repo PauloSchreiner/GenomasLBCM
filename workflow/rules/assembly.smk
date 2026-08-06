@@ -37,29 +37,49 @@ rule fastp:
 # as of now, it only works for human genomes. in the future it may be necessary to expand 
 rule decontaminate_host:
     input:
-        r1 = "results/01_clean_data/{sample}_1.fastq.gz",
-        r2 = "results/01_clean_data/{sample}_2.fastq.gz",
-        ref = config["host_references"]["human"]
+        r1="results/01_clean_data/{sample}_1.fastq.gz",
+        r2="results/01_clean_data/{sample}_2.fastq.gz"
     output:
-        r1 = "results/01b_decontam/{sample}_1.fastq.gz",
-        r2 = "results/01b_decontam/{sample}_2.fastq.gz"
+        r1="results/01b_decontam/{sample}_1.fastq.gz",
+        r2="results/01b_decontam/{sample}_2.fastq.gz"
     params:
-        # locates value from samples.tsv 
-        host = lambda wildcards: samples_df.loc[wildcards.sample, "host_remove"],
-        mem = config["minimap2"]["mem"]
-    threads: 1
+        host=lambda wildcards: samples.loc[wildcards.sample, "Host_Remove"],
+        tool=config.get("decontaminator", "minimap2"),
+        fasta=config.get("db_human_fasta", ""),
+        bt2_idx=config.get("db_human_bowtie2", "")
     log:
         "results/logs/01b_decontam_{sample}.log"
+    threads: 8
     shell:
         """
+        set -euo pipefail
+        
+        # 1. Verifica se a amostra precisa de descontaminação
         if [ "{params.host}" == "human" ]; then
-            minimap2 -a -x sr -t {threads} {params.mem} {input.ref} {input.r1} {input.r2} > results/01b_decontam/{wildcards.sample}_tmp.sam 2> {log}
             
-            samtools fastq -f 12 -@ {threads} -1 {output.r1} -2 {output.r2} -s /dev/null -0 /dev/null results/01b_decontam/{wildcards.sample}_tmp.sam >> {log} 2>&1
+            # 2a. Trilho do Servidor (Minimap2)
+            if [ "{params.tool}" == "minimap2" ]; then
+                echo "[INFO] Iniciando Minimap2 para {wildcards.sample}..." > {log}
+                minimap2 -a -x sr -t {threads} -I 8g -K 500M {params.fasta} {input.r1} {input.r2} > results/01b_decontam/{wildcards.sample}_tmp.sam 2>> {log}
+                
+                samtools fastq -f 12 -@ {threads} -1 {output.r1} -2 {output.r2} -s /dev/null -0 /dev/null results/01b_decontam/{wildcards.sample}_tmp.sam >> {log} 2>&1
+                
+                rm results/01b_decontam/{wildcards.sample}_tmp.sam
             
-            rm results/01b_decontam/{wildcards.sample}_tmp.sam
+            # 2b. Trilho do Laptop (Bowtie2)
+            elif [ "{params.tool}" == "bowtie2" ]; then
+                echo "[INFO] Iniciando Bowtie2 para {wildcards.sample}..." > {log}
+                # O parâmetro --un-conc-gz já cospe os FASTQs limpos magicamente!
+                bowtie2 -x {params.bt2_idx} -1 {input.r1} -2 {input.r2} -p {threads} --un-conc-gz results/01b_decontam/{wildcards.sample}_%.fastq.gz > /dev/null 2>> {log}
+            
+            else
+                echo "[ERROR] Ferramenta {params.tool} nao reconhecida!" >> {log}
+                exit 1
+            fi
+
+        # 3. Se nao houver contaminacao, apenas cria o atalho (symlink)
         else
-            # creates symlink if decontamination is not applied
+            echo "[INFO] Nenhuma descontaminacao solicitada. Criando symlinks..." > {log}
             ln -sf $(realpath {input.r1}) {output.r1}
             ln -sf $(realpath {input.r2}) {output.r2}
         fi
