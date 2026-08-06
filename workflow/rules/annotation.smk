@@ -1,5 +1,9 @@
-"""
+# ==============================================================================
+# assembly.smk 
+# contains the rules necessary for annotation. gets called by snakefile
+# ==============================================================================
 
+"""
 anotação funcional: 
 eggNOG-mapper para atribuição de GO
 InterProScan para identificação de domínios conservados
@@ -8,7 +12,7 @@ dbCAN/HMMER - para buscar CAZymes
 
 """
 
-# Regra temporária para não quebrar a execução. Removeremos assim que criarmos a do eggNOG.
+# placeholder
 rule placeholder_annotation:
     input:
         "results/02_assembly/{sample}/final_assembly.fasta"
@@ -16,5 +20,5 @@ rule placeholder_annotation:
         "results/03_annotation/{sample}/placeholder.txt"
     shell:
         """
-        echo "Anotação da amostra {wildcards.sample} virá aqui!" > {output}
+        echo "annotation for {wildcards.sample} !" > {output}
         """

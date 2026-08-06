@@ -1,23 +1,26 @@
 #!/bin/bash
 
 # ==============================================================================
-# Setup Script 
-# Downloads and prepares the static databases required for the pipeline.
+# setup.sh 
+# downloads and prepares the static databases required for the pipeline. 
 # ==============================================================================
 
-# Strict mode: fail on errors, unassigned variables, and pipe failures
+# strict mode: fail on errors, unassigned variables, and pipe failures
 set -euo pipefail
 
-# --- CONFIGURATION (Update links and versions here if they become obsolete) ---
+# --- CONFIGURATION ------------------------------------------------------------
+# (!!!) the links below may become obsolete, which would cause errors. 
+# if this happens, feel free to create and issue in the repo. thank you!
 KRAKEN_DIR="data/dbs/kraken2"
 KRAKEN_DB_VERSION="k2_pluspf_08gb_20240112.tar.gz"
 KRAKEN_URL="https://genome-idx.s3.amazonaws.com/kraken/${KRAKEN_DB_VERSION}"
 
+# for when annotation is implemented:
 # EGGNOG_DIR="data/eggnog_db"
 # DBCAN_DIR="data/dbcan_db"
 # ------------------------------------------------------------------------------
 
-# Helper functions for formatted output
+# helper functions for formatted output
 print_info() { echo -e "\n[INFO] $1"; }
 print_error() { echo -e "\n[ERROR] $1" >&2; }
 print_success() { echo -e "\n[SUCCESS] $1"; }
@@ -43,19 +46,19 @@ O | | | | O | | | | O | | | | O | | | | O | | | | O | | | | O | | | | O
 
 
 =====================================================================
- SETTING UP...
+                            SETTING UP...
 =====================================================================
 EOF
 
 
 
 # ==============================================================================
-# 1. KRAKEN 2 DATABASE SETUP
+# KRAKEN2 DATABASE SETUP
 # ==============================================================================
 if [ ! -f "${KRAKEN_DIR}/taxo.k2d" ]; then
     print_info "Kraken2 database not found. Starting download (approx. 6GB)..."
     
-    # Create directory and navigate into it
+    # create directory and navigate into it
     if ! mkdir -p "${KRAKEN_DIR}"; then
         print_error "Could not create directory: ${KRAKEN_DIR}"
         print_error "Suggestion: Check your write permissions in this folder."
@@ -64,7 +67,7 @@ if [ ! -f "${KRAKEN_DIR}/taxo.k2d" ]; then
     
     cd "${KRAKEN_DIR}"
     
-    # Download with error catching
+    # download with error catching
     print_info "Downloading ${KRAKEN_DB_VERSION}..."
     if ! wget --show-progress "${KRAKEN_URL}"; then
         print_error "Failed to download the Kraken2 database."
@@ -73,7 +76,7 @@ if [ ! -f "${KRAKEN_DIR}/taxo.k2d" ]; then
         exit 1
     fi
     
-    # Extraction with error catching
+    # extraction with error catching
     print_info "Extracting the database..."
     if ! tar -xzf "${KRAKEN_DB_VERSION}"; then
         print_error "Failed to extract the Kraken2 database."
@@ -82,7 +85,7 @@ if [ ! -f "${KRAKEN_DIR}/taxo.k2d" ]; then
         exit 1
     fi
     
-    # Cleanup
+    # cleanup
     print_info "Cleaning up temporary files..."
     rm "${KRAKEN_DB_VERSION}"
     cd ../../..
@@ -93,7 +96,7 @@ else
 fi
 
 # ==============================================================================
-# 2. HUMAN REFERENCE GENOME SETUP (For Decontamination)
+# HUMAN REFERENCE GENOME SETUP (for decontamination)
 # ==============================================================================
 HUMAN_DIR="data/dbs/human"
 HUMAN_FILE="Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
@@ -116,17 +119,14 @@ else
 fi
 
 
+# for when annotation is implemented:
 # ==============================================================================
-# 3. EGGNOG-MAPPER DATABASE SETUP (Placeholder for next phase)
+# EGGNOG-MAPPER DATABASE SETUP
 # ==============================================================================
-# print_info "Checking eggNOG-mapper databases..."
-# ... (code will be added here) ...
 
 # ==============================================================================
-# 4. dbCAN3 DATABASE SETUP (Placeholder for next phase)
+# dbCAN3 DATABASE SETUP 
 # ==============================================================================
-# print_info "Checking dbCAN3 databases..."
-# ... (code will be added here) ...
 
 
 

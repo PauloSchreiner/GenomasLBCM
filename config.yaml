@@ -1,9 +1,20 @@
+# ===================================================================================
+# config.yaml 
+# contains configurable parameters for the pipeline. 
+# note, however, that some parameters may be overwritten by the values in samples.tsv.
+# in those cases, this file acts as the default values.
+# to further understand this, refer to README.md 
+# ===================================================================================
+
+# pra fazer: conferir se tem sentido deixar os valores aqui como default - 
+# seria aceito deixar esses valores em branco em samples.tsv?
+
 fastp:
   qual_threshold: 20
   min_length: 50
 
 spades:
-  mode: "--isolate"  # Default, but gets overwritten by samples.tsv
+  mode: "--isolate"  # default, but gets overwritten by samples.tsv
 # mode: "--careful" 
 # mode: "--meta" 
 

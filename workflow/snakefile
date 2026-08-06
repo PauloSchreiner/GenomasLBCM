@@ -1,3 +1,9 @@
+# ==============================================================================
+# snakefile 
+# orchestrates the main pipeline and calls assembly.smk and annotation.smk by demand.
+# ==============================================================================
+
+
 import pandas as pd
 
 configfile: "config.yaml"
@@ -8,14 +14,19 @@ samples_df = pd.read_csv("samples.tsv", sep="\t").set_index("sample", drop=False
 # saves all sample names in /raw_data into SAMPLES
 SAMPLES = samples_df["sample"].tolist()
 
-# Como a linhagem do BUSCO agora varia por amostra, geramos a lista de outputs com um loop (list comprehension)
+# uses list comprehension to generate the busco outputs based on the values determined in samples.tsv
 BUSCO_OUTPUTS = [
     f"results/qc_reports/busco/{sample}/short_summary.specific.{samples_df.loc[sample, 'busco_lineage']}.{sample}.txt" 
     for sample in SAMPLES
 ]
 
 
-# RULES
+### RULES ###
+# this allows you to choose the "run mode". 
+# to simply run the QC and see the quality of the data, run "snakemake qc_only --cores all"
+# if you want to assemble the genome first (without annotating) run "snakemake assemble --cores all". This automatically includes QC.
+# if you already have the assembled genomes and now want to annotate, run "snakemake annotate" 
+# if you wish to assemble and annotate, simply run "snakemake --cores all"
 
 # assembly + annotation
 rule all:
@@ -29,7 +40,14 @@ rule all:
         expand("results/03_annotation/{sample}/placeholder.txt", sample=SAMPLES)
 
 
-# assembly and QC only
+# QC only
+rule qc_only:
+    input:
+        expand("results/qc_reports/fastp/{sample}_fastp.html", sample=SAMPLES),
+        expand("results/qc_reports/fastp/{sample}_fastp.json", sample=SAMPLES)
+
+
+# QC and assembly only
 rule assemble:
     input:
         "results/qc_reports/multiqc/multiqc_report.html",
@@ -37,19 +55,15 @@ rule assemble:
         "run_history/run_latest.stamp",
         expand("results/02_assembly/{sample}/.cleaned", sample=SAMPLES)
 
-# QC only
-rule qc_only:
-    input:
-        expand("results/qc_reports/fastp/{sample}_fastp.html", sample=SAMPLES),
-        expand("results/qc_reports/fastp/{sample}_fastp.json", sample=SAMPLES)
 
-# annotation only
+# annotation (requires assembly)
 rule annotate:
     input:
         expand("results/03_annotation/{sample}/placeholder.txt", sample=SAMPLES)
 
 
-# MODULOS
+# MODULES 
+# those files contain the rules for each module of the pipeline
 include: "rules/assembly.smk"
 include: "rules/annotation.smk"
 

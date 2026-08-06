@@ -1,3 +1,8 @@
+# ==============================================================================
+# assembly.smk 
+# contains the rules necessary for QC and assembly. gets called by snakefile
+# ==============================================================================
+
 # trimming and pre-processing
 rule fastp:
     input:
