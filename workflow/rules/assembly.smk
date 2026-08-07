@@ -33,9 +33,9 @@ rule fastp:
         """
 
 # uses minimap2 and samtools to remove all reads that correspond to human contamination.
-# to activate this, add "human" as the value of the column "host_remove" in samples.tsv.
+# to activate this, add "human" as the value of the column "decontaminate_human" in samples.tsv.
 # as of now, it only works for human genomes. in the future it may be necessary to expand 
-rule decontaminate_host:
+rule decontaminate_human:
     input:
         r1="results/01_clean_data/{sample}_1.fastq.gz",
         r2="results/01_clean_data/{sample}_2.fastq.gz"
@@ -43,7 +43,7 @@ rule decontaminate_host:
         r1="results/01b_decontam/{sample}_1.fastq.gz",
         r2="results/01b_decontam/{sample}_2.fastq.gz"
     params:
-        host=lambda wildcards: samples.loc[wildcards.sample, "Host_Remove"],
+        host=lambda wildcards: samples_df.loc[wildcards.sample, "decontaminate_human"],
         tool=config.get("decontaminator", "minimap2"),
         fasta=config.get("db_human_fasta", ""),
         bt2_idx=config.get("db_human_bowtie2", "")
@@ -320,7 +320,7 @@ rule custom_report:
         mode = lambda wildcards: samples_df.loc[wildcards.sample, "spades_mode"],
         kmers = lambda wildcards: samples_df.loc[wildcards.sample, "spades_k"],
         filter_len = lambda wildcards: samples_df.loc[wildcards.sample, "filter_len"],
-        host = lambda wildcards: samples_df.loc[wildcards.sample, "host_remove"],
+        host = lambda wildcards: samples_df.loc[wildcards.sample, "decontaminate_human"],
         downsample = lambda wildcards: samples_df.loc[wildcards.sample, "downsample_to"]
     shell:
         """
@@ -361,7 +361,7 @@ rule compile_run_history:
         # Initialize the persistent tracking database if it doesn't exist
         MASTER_TSV="run_history/master_assembly_log.tsv"
         if [ ! -f "$MASTER_TSV" ]; then
-            echo -e "Sample\tRun_Timestamp\tHost_Remove\tDownsample_To\tSpades_Mode\tKmers\tMin_Contig\tReads_Raw\tReads_Clean\tQ30_Pct\tInsert_Size\tUnclassified_Pct\tTop_Hit_1\tTop_Hit_2\tTotal_Length_bp\tContigs_>1k\tLargest_Contig\tN50\tL50\tGC_Pct\tBUSCO_C\tBUSCO_S\tBUSCO_D\tBUSCO_F\tBUSCO_M" > $MASTER_TSV
+            echo -e "sample\trun_timestamp\tdecontaminate_human\tdownsample_to\tspades_mode\tkmers\tmin_contig\treads_raw\treads_clean\tq30_pct\tinsert_size\tunclassified_pct\ttop_hit_1\ttop_hit_2\ttotal_length_bp\tcontigs_>1k\tlargest_contig\tN50\tL50\tGC_pct\tBUSCO_C\tBUSCO_S\tBUSCO_D\tBUSCO_F\tBUSCO_M" > $MASTER_TSV
         fi
 
         # Append standardized metrics from all samples to the persistent database
