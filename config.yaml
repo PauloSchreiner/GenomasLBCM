@@ -38,6 +38,7 @@ host_references:
 # "minimap2" (uses ~16gb RAM, fastest)
 # "bowtie2"  (uses ~4gb RAM, slower)
 decontaminator: "bowtie2"
+#decontaminator:  minimap2
 
 # paths to human genome for decontamination
 db_human_fasta: "data/dbs/human/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
