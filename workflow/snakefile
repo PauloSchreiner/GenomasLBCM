@@ -37,7 +37,9 @@ rule all:
         "run_history/run_latest.stamp",
         expand("results/02_assembly/{sample}/.cleaned", sample=SAMPLES),
         # annotation
-        expand("results/03_annotation/{sample}/placeholder.txt", sample=SAMPLES)
+        expand("results/03_annotation/{sample}/placeholder.txt", sample=SAMPLES),
+        # html report
+        "results/full_report.html"
 
 
 # QC only
@@ -53,13 +55,21 @@ rule assemble:
         "results/qc_reports/multiqc/multiqc_report.html",
         expand("results/qc_reports/{sample}_assembly_summary.txt", sample=SAMPLES),
         "run_history/run_latest.stamp",
-        expand("results/02_assembly/{sample}/.cleaned", sample=SAMPLES)
+        expand("results/02_assembly/{sample}/.cleaned", sample=SAMPLES),
+        # html report
+        "results/full_report.html"
 
 
 # annotation (requires assembly)
 rule annotate:
     input:
         expand("results/03_annotation/{sample}/placeholder.txt", sample=SAMPLES)
+
+
+# phylogenomics (requires assembly)
+rule phylogenomics:
+    input:
+        expand("results/04_phylogenomics/{sample}/placeholder.txt", sample=SAMPLES)
 
 
 # MODULES 

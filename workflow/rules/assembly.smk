@@ -3,6 +3,29 @@
 # contains the rules necessary for QC and assembly. gets called by snakefile
 # ==============================================================================
 
+
+# downloads busco lineage db for lineages specified in samples.tsv
+rule download_busco_lineage:
+    output:
+        lineage_dir = directory("data/dbs/busco/lineages/{lineage}")
+    log:
+        "results/logs/dbs/busco_download_{lineage}.log"
+    shell:
+        """
+        mkdir -p data/dbs/busco/information data/dbs/busco/lineages
+        
+        # Download version manifest if absent
+        if [ ! -f data/dbs/busco/information/file_versions.tsv ]; then
+            wget -q -O data/dbs/busco/information/file_versions.tsv "https://busco-data.ezlab.org/v5/data/file_versions.tsv" || \
+            wget -q -O data/dbs/busco/information/file_versions.tsv "https://busco-data2.ezlab.org/v5/data/file_versions.tsv"
+        fi
+
+        # Stream download and uncompress directly into lineages directory
+        wget -qO- "https://busco-data.ezlab.org/v5/data/lineages/{wildcards.lineage}.2024-01-08.tar.gz" 2> {log} | \
+        tar -xz -C data/dbs/busco/lineages/
+        """
+
+
 # trimming and pre-processing
 rule fastp:
     input:
@@ -16,6 +39,8 @@ rule fastp:
     params:
         qual = config["fastp"]["qual_threshold"],
         length = config["fastp"]["min_length"]
+    container:
+        config["containers"]["fastp"]
     threads: 4
     log:
         "results/logs/01_fastp_{sample}.log"
@@ -32,72 +57,78 @@ rule fastp:
             2> {log}
         """
 
-# uses minimap2 and samtools to remove all reads that correspond to human contamination.
-# to activate this, add "human" as the value of the column "decontaminate_human" in samples.tsv.
-# as of now, it only works for human genomes. in the future it may be necessary to expand 
-rule decontaminate_human:
+
+# DECONTAMINATION ROUTING
+# Evaluates 'decontaminate_human' column in samples.tsv to determine input path.
+def get_reads_for_downsampling(wildcards):
+    """
+    Dynamically routes clean FASTQs depending on whether host decontamination
+    was requested for the given sample.
+    """
+    host_status = str(samples_df.loc[wildcards.sample, "decontaminate_human"]).strip().lower()
+    
+    if host_status in ["human", "yes", "true"]:
+        # Hostile appends '.clean_1' and '.clean_2' to the original input basenames
+        return {
+            "r1": f"results/01b_decontam/{wildcards.sample}_1.clean_1.fastq.gz",
+            "r2": f"results/01b_decontam/{wildcards.sample}_2.clean_2.fastq.gz"
+        }
+    else:
+        # Bypass decontamination and consume fastp clean reads directly
+        return {
+            "r1": f"results/01_clean_data/{wildcards.sample}_1.fastq.gz",
+            "r2": f"results/01_clean_data/{wildcards.sample}_2.fastq.gz"
+        }
+
+
+# HOSTILE DECONTAMINATION
+# Removes human host reads using masked T2T-CHM13v2.0 index and Bowtie2.
+rule hostile_decontam:
     input:
-        r1="results/01_clean_data/{sample}_1.fastq.gz",
-        r2="results/01_clean_data/{sample}_2.fastq.gz"
+        r1 = "results/01_clean_data/{sample}_1.fastq.gz",
+        r2 = "results/01_clean_data/{sample}_2.fastq.gz"
     output:
-        r1="results/01b_decontam/{sample}_1.fastq.gz",
-        r2="results/01b_decontam/{sample}_2.fastq.gz"
+        r1 = "results/01b_decontam/{sample}_1.clean_1.fastq.gz",
+        r2 = "results/01b_decontam/{sample}_2.clean_2.fastq.gz",
+        json_log = "results/qc_reports/hostile/{sample}_hostile.json"
+    container:
+        config["containers"]["hostile"]
     params:
-        host=lambda wildcards: samples_df.loc[wildcards.sample, "decontaminate_human"],
-        tool=config.get("decontaminator", "minimap2"),
-        fasta=config.get("db_human_fasta", ""),
-        bt2_idx=config.get("db_human_bowtie2", "")
-    log:
-        "results/logs/01b_decontam_{sample}.log"
+        cache_dir = "data/dbs/hostile",
+        index = "human-t2t-hla",
+        out_dir = "results/01b_decontam"
     threads: 8
+    log:
+        "results/logs/01b_hostile_{sample}.log"
     shell:
         """
-        set -euo pipefail
-        
-        # 1. Verifica se a amostra precisa de descontaminação
-        if [ "{params.host}" == "human" ]; then
-            
-            # 2a. Trilho do Servidor (Minimap2)
-            if [ "{params.tool}" == "minimap2" ]; then
-                echo "[INFO] Iniciando Minimap2 para {wildcards.sample}..." > {log}
-                minimap2 -a -x sr -t {threads} -I 8g -K 500M {params.fasta} {input.r1} {input.r2} > results/01b_decontam/{wildcards.sample}_tmp.sam 2>> {log}
-                
-                samtools fastq -f 12 -@ {threads} -1 {output.r1} -2 {output.r2} -s /dev/null -0 /dev/null results/01b_decontam/{wildcards.sample}_tmp.sam >> {log} 2>&1
-                
-                rm results/01b_decontam/{wildcards.sample}_tmp.sam
-            
-            # 2b. Trilho do Laptop (Bowtie2)
-            elif [ "{params.tool}" == "bowtie2" ]; then
-                echo "[INFO] Iniciando Bowtie2 para {wildcards.sample}..." > {log}
-                # O parâmetro --un-conc-gz já cospe os FASTQs limpos magicamente!
-                bowtie2 -x {params.bt2_idx} -1 {input.r1} -2 {input.r2} -p {threads} --un-conc-gz results/01b_decontam/{wildcards.sample}_%.fastq.gz > /dev/null 2>> {log}
-            
-            else
-                echo "[ERROR] Ferramenta {params.tool} nao reconhecida!" >> {log}
-                exit 1
-            fi
+        # Override default user home cache directory to project workspace
+        export HOSTILE_CACHE_DIR="{params.cache_dir}"
 
-        # 3. Se nao houver contaminacao, apenas cria o atalho (symlink)
-        else
-            echo "[INFO] Nenhuma descontaminacao solicitada. Criando symlinks..." > {log}
-            ln -sf $(realpath {input.r1}) {output.r1}
-            ln -sf $(realpath {input.r2}) {output.r2}
-        fi
+        hostile clean \
+            --fastq1 {input.r1} \
+            --fastq2 {input.r2} \
+            --aligner bowtie2 \
+            --index {params.index} \
+            --output {params.out_dir} \
+            --threads {threads} \
+            --airplane \
+            --force \
+            > {output.json_log} 2> {log}
         """
 
 
-# uses seqtk to downsample reads, which is necessary when there are too many. 
-# to activate this, add the desired amount of reads in the column "downsample_to"
-# of samples.tsv. Recommended amount is 4000000
+# DOWNSAMPLING
+# Normalizes sequencing depth across samples prior to de novo assembly.
 rule downsample_reads:
     input:
-        r1 = "results/01b_decontam/{sample}_1.fastq.gz",
-        r2 = "results/01b_decontam/{sample}_2.fastq.gz"
+        unpack(get_reads_for_downsampling)
     output:
         r1 = "results/01c_downsample/{sample}_1.fastq.gz",
         r2 = "results/01c_downsample/{sample}_2.fastq.gz"
+    container:
+        config["containers"]["seqtk"]
     params:
-        # selects corresponding value from samples.tsv
         target = lambda wildcards: samples_df.loc[wildcards.sample, "downsample_to"]
     threads: 2
     log:
@@ -108,7 +139,7 @@ rule downsample_reads:
             ln -sf $(realpath {input.r1}) {output.r1}
             ln -sf $(realpath {input.r2}) {output.r2}
         else
-            # Selects randomly a defined amount of reads (seed 42 for reproducibility)
+            # Sample reads randomly with fixed seed (42) for reproducibility
             seqtk sample -s 42 {input.r1} {params.target} | gzip > {output.r1}
             seqtk sample -s 42 {input.r2} {params.target} | gzip > {output.r2}
         fi
@@ -122,6 +153,8 @@ rule spades:
     output:
         contigs = "results/02_assembly/{sample}/contigs.fasta",
         scaffolds = "results/02_assembly/{sample}/scaffolds.fasta"
+    container:
+        config["containers"]["spades"]
     params:
         outdir = "results/02_assembly/{sample}",
         # locates mode from samples.tsv
@@ -151,6 +184,8 @@ rule filter_contigs:
         scaffolds = "results/02_assembly/{sample}/scaffolds.fasta"
     output:
         filtered = "results/02_assembly/{sample}/scaffolds_filtered.fasta"
+    container:
+        config["containers"]["seqtk"]
     params:
         min_len = lambda wildcards: samples_df.loc[wildcards.sample, "filter_len"]
     log:
@@ -161,14 +196,49 @@ rule filter_contigs:
         """
 
 
+# POLISHING
+# Refines the assembly by correcting base errors and small indels using the original short reads.
+rule pypolca:
+    input:
+        assembly = "results/02_assembly/{sample}/scaffolds_filtered.fasta",
+        r1 = "results/01c_downsample/{sample}_1.fastq.gz",
+        r2 = "results/01c_downsample/{sample}_2.fastq.gz"
+    output:
+        corrected = "results/02_assembly/{sample}/pypolca/{sample}_corrected.fasta",
+        report = "results/02_assembly/{sample}/pypolca/{sample}.report"
+    container:
+        config["containers"]["pypolca"]
+    params:
+        outdir = "results/02_assembly/{sample}/pypolca",
+        prefix = "{sample}"
+    threads: 8
+    log:
+        "results/logs/02c_pypolca_{sample}.log"
+    shell:
+        """
+        pypolca run \
+            -a {input.assembly} \
+            -1 {input.r1} \
+            -2 {input.r2} \
+            -t {threads} \
+            -o {params.outdir} \
+            -p {params.prefix} \
+            --careful \
+            -f \
+            > {log} 2>&1
+        """
+
+
 # Chamada so se a amostra tiver algo diferente de "none" na coluna "reference_genome" em samples.tsv
 # RagTag usa um genoma de referência pra montar os scaffolds
 rule ragtag_scaffold:
     input:
-        assembly = "results/02_assembly/{sample}/scaffolds_filtered.fasta",
+        assembly = "results/02_assembly/{sample}/pypolca/{sample}_corrected.fasta", # << AQUI
         reference = lambda wildcards: samples_df.loc[wildcards.sample, "reference_genome"]
     output:
         scaffolded = "results/02_assembly/{sample}/ragtag_output/ragtag.scaffold.fasta"
+    container:
+        config["containers"]["ragtag"]
     params:
         outdir = "results/02_assembly/{sample}/ragtag_output"
     threads: 4
@@ -187,7 +257,7 @@ rule unify_assembly:
         lambda wildcards: (
             "results/02_assembly/{sample}/ragtag_output/ragtag.scaffold.fasta"
             if str(samples_df.loc[wildcards.sample, "reference_genome"]).strip().lower() != "none"
-            else "results/02_assembly/{sample}/scaffolds_filtered.fasta"
+            else "results/02_assembly/{sample}/pypolca/{sample}_corrected.fasta" # << AQUI
         )
     output:
         final_assembly = "results/02_assembly/{sample}/final_assembly.fasta"
@@ -205,6 +275,8 @@ rule kraken2:
     output:
         report = "results/qc_reports/kraken2/{sample}_kraken2_report.txt",
         output_txt = "results/qc_reports/kraken2/{sample}_kraken2_output.txt"
+    container:
+        config["containers"]["kraken2"]
     params:
         db = config["kraken2"]["db"],
         mem = config["kraken2"]["mem"]
@@ -228,6 +300,8 @@ rule quast:
         assembly = "results/02_assembly/{sample}/final_assembly.fasta"
     output:
         report = "results/qc_reports/quast/{sample}/report.tsv"
+    container:
+        config["containers"]["quast"]
     params:
         outdir = "results/qc_reports/quast/{sample}"
     threads: 4
@@ -241,11 +315,16 @@ rule quast:
                  > {log} 2>&1
         """
 
+
+
 rule busco:
     input:
-        assembly = "results/02_assembly/{sample}/final_assembly.fasta"
+        assembly = "results/02_assembly/{sample}/final_assembly.fasta",
+        lineage_db = lambda wildcards: f"data/dbs/busco/lineages/{samples_df.loc[wildcards.sample, 'busco_lineage']}"
     output:
         summary = "results/qc_reports/busco/{sample}/short_summary.specific.{lineage}.{sample}.txt"
+    container:
+        config["containers"]["busco"]
     params:
         out_path = "results/qc_reports/busco",
         lineage = lambda wildcards: samples_df.loc[wildcards.sample, "busco_lineage"]
@@ -254,11 +333,17 @@ rule busco:
         "results/logs/03_busco_{sample}_{lineage}.log"
     shell:
         """
+        # Force Python unbuffered logging and limit OpenMP threads to prevent deadlocks
+        export PYTHONUNBUFFERED=1
+        export OMP_NUM_THREADS={threads}
+
         busco -i {input.assembly} \
-              -l {wildcards.lineage} \
+              -l {input.lineage_db} \
               -o {wildcards.sample} \
               --out_path {params.out_path} \
               --download_path data/dbs/busco \
+              --offline \
+              --opt-out-run-stats \
               -m genome \
               -c {threads} \
               -f \
@@ -274,6 +359,8 @@ rule multiqc:
         kraken = expand("results/qc_reports/kraken2/{sample}_kraken2_report.txt", sample=SAMPLES)
     output:
         report = "results/qc_reports/multiqc/multiqc_report.html"
+    container:
+        config["containers"]["multiqc"]
     params:
         search_dir = "results/qc_reports",
         outdir = "results/qc_reports/multiqc"
@@ -312,7 +399,8 @@ rule custom_report:
         quast = "results/qc_reports/quast/{sample}/report.tsv",
         busco = lambda wildcards: f"results/qc_reports/busco/{wildcards.sample}/short_summary.specific.{samples_df.loc[wildcards.sample, 'busco_lineage']}.{wildcards.sample}.txt",
         fastp = "results/qc_reports/fastp/{sample}_fastp.json",
-        kraken = "results/qc_reports/kraken2/{sample}_kraken2_report.txt"
+        kraken = "results/qc_reports/kraken2/{sample}_kraken2_report.txt",
+        pypolca = "results/02_assembly/{sample}/pypolca/{sample}.report" # NOVO INPUT
     output:
         report = "results/qc_reports/{sample}_assembly_summary.txt",
         tsv_line = "results/qc_reports/{sample}_summary_line.tsv"
@@ -336,8 +424,10 @@ rule custom_report:
             "{params.kmers}" \
             {params.filter_len} \
             {params.host} \
-            {params.downsample}
+            {params.downsample} \
+            {input.pypolca} 
         """
+
 
 # Implements a persistent data-logging architecture. 
 # Bioinformatics working directories (like results/) are ephemeral and often deleted 
@@ -349,29 +439,32 @@ rule compile_run_history:
         txts = expand("results/qc_reports/{sample}_assembly_summary.txt", sample=SAMPLES),
         tsvs = expand("results/qc_reports/{sample}_summary_line.tsv", sample=SAMPLES)
     output:
-        "run_history/run_latest.stamp"
+        stamp = "run_history/run_latest.stamp",
+        dashboard = "results/full_report.html"
     shell:
         """
-        # Isolate the current execution metadata into a unique timestamped capsule
         mkdir -p run_history/capsules
         DATE_TAG=$(date +"%Y-%m-%d_%H-%M-%S")
         CAPSULE_DIR="run_history/capsules/run_${{DATE_TAG}}"
         mkdir -p $CAPSULE_DIR
 
-        # Initialize the persistent tracking database if it doesn't exist
         MASTER_TSV="run_history/master_assembly_log.tsv"
         if [ ! -f "$MASTER_TSV" ]; then
-            echo -e "sample\trun_timestamp\tdecontaminate_human\tdownsample_to\tspades_mode\tkmers\tmin_contig\treads_raw\treads_clean\tq30_pct\tinsert_size\tunclassified_pct\ttop_hit_1\ttop_hit_2\ttotal_length_bp\tcontigs_>1k\tlargest_contig\tN50\tL50\tGC_pct\tBUSCO_C\tBUSCO_S\tBUSCO_D\tBUSCO_F\tBUSCO_M" > $MASTER_TSV
+            echo -e "Sample\tRun_Timestamp\tHost_Remove\tHost_Removed_Reads\tDownsample_To\tSpades_Mode\tKmers\tMin_Contig\tReads_Raw\tReads_Clean\tQ30_Pct\tInsert_Size\tPolca_SNPs\tPolca_Indels\tUnclassified_Pct\tTop_Hit_1\tTop_Hit_2\tTotal_Length_bp\tContigs_>1k\tLargest_Contig\tN50\tL50\tGC_Pct\tBUSCO_C\tBUSCO_S\tBUSCO_D\tBUSCO_F\tBUSCO_M" > $MASTER_TSV
         fi
 
-        # Append standardized metrics from all samples to the persistent database
         cat {input.tsvs} >> $MASTER_TSV
 
-        # Snapshot the workflow configuration to guarantee full reproducibility of these metrics
         cp samples.tsv $CAPSULE_DIR/
         cp config.yaml $CAPSULE_DIR/
         cp {input.txts} $CAPSULE_DIR/
         
-        touch {output}
+        # Gera o Dashboard HTML interativo
+        python scripts/build_html_report.py $MASTER_TSV {output.dashboard} {input.txts}
+        
+        # Salva uma cópia do dashboard na cápsula do tempo
+        cp {output.dashboard} $CAPSULE_DIR/
+
+        touch {output.stamp}
         """
 

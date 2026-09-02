@@ -1,2 +1,8 @@
-sample	spades_mode	spades_k	cov_cutoff	filter_len	busco_lineage	reference_genome	decontaminate_human	downsample_to
-boidinii	--isolate	auto	auto	500	saccharomycetes_odb10	none	human	none
+sample	decontaminate_human	downsample_to	spades_mode	spades_k	cov_cutoff	filter_len	reference_genome	busco_lineage
+boidinii	yes	none	--isolate	auto	auto	500	none	saccharomycetes_odb10
+kudriavzevii	no	none	--isolate	auto	auto	500	none	saccharomycetes_odb10
+mrakii	no	none	--isolate	auto	auto	500	none	saccharomycetes_odb10
+pseudolambica	no	none	--isolate	auto	auto	500	none	saccharomycetes_odb10
+blastobotrys_peorensis	no	2500000	--isolate	auto	auto	500	none	saccharomycetes_odb10
+suhomyces_sequanensis	no	none	--isolate	auto	auto	500	none	saccharomycetes_odb10
+

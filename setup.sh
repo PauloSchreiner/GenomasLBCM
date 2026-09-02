@@ -53,6 +53,28 @@ O | | | | O | | | | O | | | | O | | | | O | | | | O | | | | O | | | | O
 =======================================================================
 EOF
 
+# ==============================================================================
+# BIOCONTAINERS PRE-FETCH (READ FROM config.yaml)
+# pre-builds SIF container images dynamically from the pipeline configuration
+# ==============================================================================
+print_info "Pre-fetching all BioContainers SIF images from config.yaml..."
+
+mkdir -p data/containers/cache
+export APPTAINER_CACHEDIR="$PWD/data/containers"
+
+# parse container URLs from config.yaml using python
+python -c "
+import yaml
+with open('config.yaml', 'r') as f:
+    cfg = yaml.safe_load(f)
+for tool, url in cfg.get('containers', {}).items():
+    print(f'{tool}\t{url}')
+" | while IFS=$'\t' read -r TOOL URL; do
+    echo "[INFO] Pulling and verifying container for ${TOOL}: ${URL}"
+    apptainer exec --cleanenv "${URL}" true
+done
+
+print_success "All pipeline containers pre-fetched and ready!"
 
 # ==============================================================================
 # KRAKEN2 DATABASE SETUP
@@ -98,72 +120,27 @@ else
 fi
 
 # ==============================================================================
-# MINIMAP2 HUMAN REFERENCE GENOME SETUP (for decontamination)
+# HOSTILE DATABASE SETUP (HUMAN DECONTAMINATION)
+# Pre-fetches the masked human reference genome (T2T-CHM13v2.0 + HLA)
 # ==============================================================================
-HUMAN_DIR="data/dbs/human"
-HUMAN_FILE="Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
-HUMAN_URL="https://ftp.ensembl.org/pub/release-110/fasta/homo_sapiens/dna/${HUMAN_FILE}"
+echo "[INFO] Fetching Hostile human T2T-HLA reference index (Bowtie2)..."
 
-if [ ! -f "${HUMAN_DIR}/${HUMAN_FILE}" ]; then
-    print_info "Human reference genome not found. Starting download (~800MB)..."
-    
-    if ! mkdir -p "${HUMAN_DIR}"; then
-        print_error "Could not create directory: ${HUMAN_DIR}"
-        exit 1
-    fi
-    
-    cd "${HUMAN_DIR}"
-    
-    if ! wget --show-progress "${HUMAN_URL}"; then
-        print_error "Failed to download the Human reference genome."
-        exit 1
-    fi
-    
-    cd ../../..
-    print_success "Human reference genome configured successfully!"
-else
-    print_info "Human reference genome already exists. Skipping download."
-fi
+# ensure target directories exist
+mkdir -p data/dbs/hostile
+mkdir -p data/containers/cache
 
+# enforce local Apptainer cache directory
+export APPTAINER_CACHEDIR="$PWD/data/containers"
 
-# ==============================================================================
-# BOWTIE2 INDEX SETUP (alternative for decontamination)
-# ==============================================================================
-BOWTIE2_DIR="data/dbs/human/bowtie2"
-BOWTIE2_URL="https://genome-idx.s3.amazonaws.com/bt/GRCh38_noalt_as.zip"
-BOWTIE2_FILE="GRCh38_noalt_as.zip"
+# download and cache the Bowtie2 index using the containerized binary (in a clean environment)
+apptainer exec \
+    --cleanenv \
+    --bind "$PWD:$PWD" \
+    --env HOSTILE_CACHE_DIR="$PWD/data/dbs/hostile" \
+    docker://quay.io/biocontainers/hostile:2.0.2--pyhdfd78af_0 \
+    bash -c "export HOSTILE_CACHE_DIR=$PWD/data/dbs/hostile && hostile index fetch --name human-t2t-hla --bowtie2"
 
-if [ ! -f "${BOWTIE2_DIR}/GRCh38_noalt_as.1.bt2" ]; then
-    print_info "Bowtie2 index not found. Starting download (~4GB)..."
-    
-    if ! mkdir -p "${BOWTIE2_DIR}"; then
-        print_error "Could not create directory: ${BOWTIE2_DIR}"
-        exit 1
-    fi
-    
-    # download with error catching
-    print_info "Downloading Bowtie2 index archive..."
-    if ! wget --show-progress "${BOWTIE2_URL}" -O "${BOWTIE2_DIR}/${BOWTIE2_FILE}"; then
-        print_error "Failed to download the Bowtie2 index."
-        exit 1
-    fi
-    
-    # extraction with error catching
-    print_info "Extracting the index..."
-    if ! unzip -j "${BOWTIE2_DIR}/${BOWTIE2_FILE}" -d "${BOWTIE2_DIR}/"; then
-        print_error "Failed to extract the Bowtie2 index."
-        print_error "Suggestion: The downloaded zip archive might be corrupted."
-        exit 1
-    fi
-    
-    # cleanup
-    print_info "Cleaning up temporary files..."
-    rm "${BOWTIE2_DIR}/${BOWTIE2_FILE}"
-    
-    print_success "Bowtie2 index configured successfully!"
-else
-    print_info "Bowtie2 index already exists. Skipping download."
-fi
+echo "[INFO] Hostile database setup complete."
 
 
 # for when annotation is implemented:
@@ -178,5 +155,5 @@ fi
 
 echo "====================================================================="
 echo " Setup Completed! The environment is ready."
-echo " Now you might want to run: snakemake assemble --cores all"
+echo " Now you might want to run: snakemake assemble --cores all --use-apptainer"
 echo "====================================================================="
