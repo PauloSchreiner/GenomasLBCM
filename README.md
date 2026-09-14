@@ -10,3 +10,6 @@ detalhar:
 - todos downloads de db que se faz (quantos gb são necessários)
 - passos da pipeline
 - estrutura da pipeline
+
+O input deve ser colocado em data/raw no formato: NOME_1.fastq.gz E NOME_2.fastq.gz
+(para converter em gz, usar gzip)

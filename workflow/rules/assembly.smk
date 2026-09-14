@@ -429,6 +429,7 @@ rule custom_report:
         """
 
 
+
 # Implements a persistent data-logging architecture. 
 # Bioinformatics working directories (like results/) are ephemeral and often deleted 
 # to save storage. This rule captures a permanent snapshot of the run's metadata, 
