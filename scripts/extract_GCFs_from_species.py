@@ -43,3 +43,6 @@ print(f"Salvando resultados em {caminho_tsv}...")
 df.to_csv(caminho_tsv, index=False, sep="\t")
 
 print(f"\nDe {len(df)}, {(df['GCF'] != "Not found").sum()} têm genoma de referência!")
+
+
+### Implementar busca por niveis taxonomicos superiores para pegar mais GCFs!!!
