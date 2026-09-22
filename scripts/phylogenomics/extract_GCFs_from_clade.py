@@ -39,7 +39,5 @@ for grupo in grupos_taxonomicos:
 
 print(df)
 
-# print(f"Salvando resultados em {caminho_tsv}...")
-# df.to_csv(caminho_tsv, index=False, sep="\t")
-
-# print(f"\nDe {len(df)}, {(df['GCF'] != "Not found").sum()} têm genoma de referência!")
+print(f"Salvando resultados em {caminho_tsv}...")
+df.to_csv(caminho_tsv, index=False, sep="\t")
