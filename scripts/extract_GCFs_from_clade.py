@@ -22,16 +22,15 @@ for grupo in grupos_taxonomicos:
 
     if result.stdout != "":
 
-        data_list = result.stdout.split("\n")
+        data_list = [line for line in result.stdout.split("\n") if line.strip()]
 
         for species_data in data_list:
             species_dict = json.loads(species_data)
 
-            print(json.dumps(species_dict, sort_keys=True, indent=4))
-
+            # print(json.dumps(species_dict, sort_keys=True, indent=4))
 
             gcf = species_dict["current_accession"] 
-            species = species_dict["organism"]["organism_name"] ## O erro ta aqui
+            species = species_dict["organism"]["organism_name"]
 
             print(species + " possui genoma de referência de código " + gcf)
 
