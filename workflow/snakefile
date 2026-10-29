@@ -3,14 +3,15 @@
 # orchestrates the main pipeline and calls assembly.smk and annotation.smk by demand.
 # ==============================================================================
 
-
+import os
 import pandas as pd
 
 configfile: "config.yaml"
 
-# reads the sheet with samples and run params
-samples_df = pd.read_csv("samples.tsv", sep="\t").set_index("sample", drop=False)
-
+# path do arquivo de samples pode ser sobrescrito por variável de ambiente
+# (usado pelo smoke test: GENOMASLBCM_SAMPLES=samples_test.tsv)
+SAMPLES_FILE = os.environ.get("GENOMASLBCM_SAMPLES", "samples.tsv")
+samples_df = pd.read_csv(SAMPLES_FILE, sep="\t").set_index("sample", drop=False)
 # saves all sample names in /raw_data into SAMPLES
 SAMPLES = samples_df["sample"].tolist()
 
@@ -77,4 +78,13 @@ rule phylogenomics:
 include: "rules/assembly.smk"
 include: "rules/annotation.smk"
 
-
+# smoke test: roda pipeline em dataset minúsculo (~100k read pairs)
+# uso (do root do projeto):
+#   GENOMASLBCM_SAMPLES=samples_test.tsv \
+#   snakemake -s workflow/snakefile smoke --cores 4 --use-apptainer
+# verifica: fastp, spades, filter, pypolca, quast, busco, kraken2, custom_report, cleanup
+# não inclui: multiqc, compile_run_history (testar separadamente)
+rule smoke:
+    input:
+        expand("results/qc_reports/{sample}_assembly_summary.txt", sample=SAMPLES),
+        expand("results/02_assembly/{sample}/.cleaned", sample=SAMPLES),
