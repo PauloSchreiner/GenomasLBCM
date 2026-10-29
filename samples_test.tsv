@@ -1,0 +1,2 @@
+sample	decontaminate_human	downsample_to	spades_mode	spades_k	cov_cutoff	filter_len	reference_genome	busco_lineage
+test_sample	no	none	--isolate	auto	auto	500	none	saccharomycetes_odb10
